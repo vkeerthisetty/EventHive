@@ -12,7 +12,13 @@ export interface User {
   bio?: string | null;
   interests?: string[];
   open_to_team?: boolean;
-  skills?: Array<{ id: number; slug: string; label: string; skill_group: string; level: number }>;
+  skills?: Array<{
+    id: number;
+    slug: string;
+    label: string;
+    skill_group: string;
+    level: number;
+  }>;
 }
 
 interface AuthContextType {
@@ -24,6 +30,38 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
+const STORAGE_KEY = 'eventhive_demo_user';
+
+const DEMO_USERS: Array<User & { password: string }> = [
+  {
+    id: 'demo-student-riya',
+    name: 'Riya Sharma',
+    email: 'riya@eventhive.test',
+    password: 'Student@123',
+    role: 'student' as Role,
+    department: 'CSE',
+    year: 3,
+  },
+  {
+    id: 'demo-organizer-priya',
+    name: 'Priya Nair',
+    email: 'tech@eventhive.test',
+    password: 'Organizer@123',
+    role: 'organizer' as Role,
+    department: 'CSE',
+    year: 3,
+  },
+  {
+    id: 'demo-admin',
+    name: 'EventHive Admin',
+    email: 'admin@eventhive.test',
+    password: 'Admin@123',
+    role: 'admin' as Role,
+    department: 'Administration',
+    year: 1,
+  },
+];
+
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
@@ -33,20 +71,23 @@ const AuthContext = createContext<AuthContextType>({
   refreshUser: async () => {},
 });
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{
+  children: React.ReactNode;
+}> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshUser = async () => {
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
+      const savedUser = localStorage.getItem(STORAGE_KEY);
+
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
       } else {
         setUser(null);
       }
     } catch {
+      localStorage.removeItem(STORAGE_KEY);
       setUser(null);
     } finally {
       setLoading(false);
@@ -57,36 +98,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshUser();
   }, []);
 
-  const post = async (path: string, body: any) => {
-    const res = await fetch(path, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error?.message || 'Request failed');
-    return data;
-  };
   const login = async (email: string, password: string) => {
-    const data = await post('/api/auth/login', { email, password });
-    setUser(data.user);
+    const foundUser = DEMO_USERS.find(
+      (u) =>
+        u.email.toLowerCase() === email.trim().toLowerCase() &&
+        u.password === password
+    );
+
+    if (!foundUser) {
+      throw new Error(
+        'Invalid demo login. Please use one of the Quick Demo Login buttons.'
+      );
+    }
+
+    const { password: _password, ...safeUser } = foundUser;
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(safeUser));
+    setUser(safeUser);
   };
-  const signup = async (b: Record<string, any>) => {
-    const { fullName, role, organizerCode, ...rest } = b;
-    const payload = role === 'organizer'
-      ? { name: fullName, ...rest, organizerCode }
-      : { name: fullName, ...rest };
-    const data = await post('/api/auth/signup', payload);
-    setUser(data.user);
+
+  const signup = async (body: Record<string, any>) => {
+    const newUser: User = {
+      id: `demo-user-${Date.now()}`,
+      name: body.fullName || body.name || 'New User',
+      email: body.email,
+      role: body.role || ('student' as Role),
+      department: body.department || 'CSE',
+      year: body.year || 1,
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
+    setUser(newUser);
   };
 
   const logout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
-    } finally {
-      setUser(null);
-      window.location.href = '/';
-    }
+    localStorage.removeItem(STORAGE_KEY);
+    setUser(null);
+
+    // Use SPA navigation instead of relying on the backend
+    window.location.href = '/';
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        signup,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
