@@ -1,3 +1,4 @@
+
 {
   "name": "@eventhive/web",
   "version": "1.0.0",
@@ -11,6 +12,7 @@
     "@cloudflare/blindrsa-ts": "^0.4.6",
     "@eventhive/shared": "*",
     "@fontsource/inter": "^5.0.19",
+    "@tanstack/react-query": "^5.105.0",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.1.3",
     "lucide-react": "^0.395.0",
