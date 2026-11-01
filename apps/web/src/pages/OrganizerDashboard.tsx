@@ -5,10 +5,13 @@ import { Calendar, PlusCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getDemoEvents } from '../lib/demoEvents';
 
+const MIN_REPORT_RESPONSES = 5;
+
 export const OrganizerDashboard: React.FC = () => {
   const { user } = useAuth();
 
   const [events, setEvents] = useState<any[]>([]);
+  const [feedback, setFeedback] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadDashboard = () => {
@@ -30,6 +33,15 @@ export const OrganizerDashboard: React.FC = () => {
       );
 
       setEvents(organizerEvents);
+
+      try {
+        const savedFeedback = JSON.parse(
+          localStorage.getItem('eventhive_demo_feedback') || '[]'
+        );
+        setFeedback(Array.isArray(savedFeedback) ? savedFeedback : []);
+      } catch {
+        setFeedback([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -69,7 +81,7 @@ export const OrganizerDashboard: React.FC = () => {
 
   const totalRegistrations = events.reduce(
     (total, event) =>
-      total + (event.registrationCount || 0),
+      total + (event.confirmedCount || 0),
     0
   );
 
@@ -78,6 +90,12 @@ export const OrganizerDashboard: React.FC = () => {
       total + (event.confirmedCount || 0),
     0
   );
+
+  const eventIds = new Set(events.map((event) => event.id));
+  const organizerFeedback = feedback.filter((item) => eventIds.has(item.eventId));
+
+  const feedbackForEvent = (eventId: string) =>
+    organizerFeedback.filter((item) => item.eventId === eventId);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -114,7 +132,7 @@ export const OrganizerDashboard: React.FC = () => {
 
       {/* METRICS */}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
 
@@ -126,6 +144,15 @@ export const OrganizerDashboard: React.FC = () => {
             {totalEvents}
           </p>
 
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+          <span className="text-xs font-bold uppercase text-slate-400">
+            Anonymous Responses
+          </span>
+          <p className="text-3xl font-black text-violet-600 dark:text-violet-400 mt-2">
+            {organizerFeedback.length}
+          </p>
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
@@ -165,7 +192,7 @@ export const OrganizerDashboard: React.FC = () => {
           </h2>
 
           <span className="text-xs text-slate-400">
-            Stored locally for demo
+            Ratings unlock after {MIN_REPORT_RESPONSES} responses
           </span>
 
         </div>
@@ -226,6 +253,10 @@ export const OrganizerDashboard: React.FC = () => {
                     Status
                   </th>
 
+                  <th className="px-6 py-3.5 text-center">
+                    Feedback
+                  </th>
+
                   <th className="px-6 py-3.5 text-right">
                     Action
                   </th>
@@ -279,7 +310,7 @@ export const OrganizerDashboard: React.FC = () => {
 
                     <td className="px-6 py-4 text-center font-bold text-xs">
 
-                      {event.registrationCount} / {event.capacity}
+                      {event.confirmedCount || 0} / {event.capacity}
 
                     </td>
 
@@ -291,6 +322,31 @@ export const OrganizerDashboard: React.FC = () => {
 
                       </span>
 
+                    </td>
+
+                    <td className="px-6 py-4 text-center text-xs">
+                      {(() => {
+                        const responses = feedbackForEvent(event.id);
+                        if (responses.length === 0) {
+                          return <span className="text-slate-400">No responses</span>;
+                        }
+                        if (responses.length < MIN_REPORT_RESPONSES) {
+                          return (
+                            <span className="font-semibold text-amber-600 dark:text-amber-400">
+                              Protected ({responses.length}/{MIN_REPORT_RESPONSES})
+                            </span>
+                          );
+                        }
+                        const average = responses.reduce(
+                          (sum, response) => sum + Number(response.overall || 0),
+                          0
+                        ) / responses.length;
+                        return (
+                          <span className="font-bold text-violet-600 dark:text-violet-400">
+                            {average.toFixed(1)} / 5 ({responses.length})
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     <td className="px-6 py-4 text-right">
