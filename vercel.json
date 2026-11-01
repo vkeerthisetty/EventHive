@@ -4,7 +4,16 @@
   "outputDirectory": "apps/web/dist",
   "framework": "vite",
   "routes": [
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/[...path].js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
   ]
 }
