@@ -377,7 +377,6 @@ function filterEvents(params) {
     if (q && !haystack.includes(q)) return false;
     if (categories.length && !categories.includes(event.category)) return false;
 
-    // Multiple selected accessibility/dietary values use the same overlap behavior as the API.
     if (
       accessibility.length &&
       !accessibility.some((item) => event.accessibility.includes(item))
@@ -433,13 +432,13 @@ function makeCalendarFile(event) {
   const stamp = (value) =>
     new Date(value).toISOString()
       .replace(/[-:]/g, '')
-      .replace(/\\.\\d{3}Z$/, 'Z');
+      .replace(/\.\d{3}Z$/, 'Z');
 
   const escape = (value) => String(value || '')
-    .replace(/\\\\/g, '\\\\\\\\')
-    .replace(/\\n/g, '\\\\n')
-    .replace(/,/g, '\\\\,')
-    .replace(/;/g, '\\\\;');
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
 
   return [
     'BEGIN:VCALENDAR',
@@ -455,12 +454,12 @@ function makeCalendarFile(event) {
     `LOCATION:${escape(event.venue_name)}`,
     'END:VEVENT',
     'END:VCALENDAR',
-  ].join('\\r\\n');
+  ].join('\r\n');
 }
 
 // Keep the original proxy as a fallback for routes not yet converted to demo mode.
 async function proxyToOriginalBackend(req, res) {
-  const base = (process.env.API_BACKEND_URL || '').replace(/\\/$/, '');
+  const base = (process.env.API_BACKEND_URL || '').replace(/\/$/, '');
 
   if (!base) {
     return sendJson(res, 503, {
@@ -548,9 +547,9 @@ module.exports = async function handler(req, res) {
   const isEventList = path === '/api/events';
   const isFilterMetadata = path === '/api/events/filters/meta';
   const calendarMatch = path.match(
-    /^\\/api\\/events\\/([^/]+)\\/calendar\\.ics$/
+    /^\/api\/events\/([^/]+)\/calendar\.ics$/
   );
-  const detailMatch = path.match(/^\\/api\\/events\\/([^/]+)$/);
+  const detailMatch = path.match(/^\/api\/events\/([^/]+)$/);
 
   const isLocalEventReadRoute =
     isEventList ||
