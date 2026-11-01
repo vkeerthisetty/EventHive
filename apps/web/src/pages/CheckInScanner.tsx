@@ -180,10 +180,6 @@ export const CheckInScanner: React.FC = () => {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-4 text-xs text-amber-800 dark:text-amber-300">
-        Hackathon demo: locally created events and registrations must be in this same browser. Camera scanning and copied ticket codes use the same verification logic.
-      </div>
-
       <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm space-y-5">
         <label className="block space-y-2">
           <span className="text-xs font-bold uppercase text-slate-500">Event</span>
