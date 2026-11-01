@@ -1,4 +1,3 @@
-
 const DAY = 24 * 60 * 60 * 1000;
 const INDIA_OFFSET_MINUTES = 330;
 
@@ -61,8 +60,6 @@ const slots = {
   past: at(-3, 14, 2),
 };
 
-// Read-only hackathon demo catalogue.
-// These are demo records, not database records.
 function makeEvent(options) {
   const time = slots[options.slot];
 
@@ -457,6 +454,123 @@ function makeCalendarFile(event) {
   ].join('\r\n');
 }
 
+// Demo-only registrations are stored in a browser cookie. They are intentionally
+// not a database and are suitable only for this Vercel demo.
+const DEMO_USER = {
+  id: 'demo-student',
+  name: 'Demo Student',
+  email: 'demo@student.eventhive.local',
+  role: 'student',
+  department: 'Computer Science',
+  year: 3,
+};
+
+function parseCookies(req) {
+  const raw = req.headers.cookie || '';
+
+  return Object.fromEntries(
+    raw.split(';')
+      .map((part) => {
+        const index = part.indexOf('=');
+
+        if (index === -1) {
+          return [part.trim(), ''];
+        }
+
+        return [
+          part.slice(0, index).trim(),
+          part.slice(index + 1).trim(),
+        ];
+      })
+      .filter(([key]) => key)
+  );
+}
+
+function getDemoRegistrations(req) {
+  try {
+    const cookies = parseCookies(req);
+    const raw = cookies.eh_demo_regs;
+
+    if (!raw) return [];
+
+    const value = JSON.parse(
+      Buffer.from(raw, 'base64url').toString('utf8')
+    );
+
+    return Array.isArray(value) ? value : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function setDemoRegistrations(res, registrations) {
+  const value = Buffer.from(
+    JSON.stringify(registrations),
+    'utf8'
+  ).toString('base64url');
+
+  res.setHeader(
+    'set-cookie',
+    `eh_demo_regs=${value}; Path=/; Max-Age=2592000; SameSite=Lax; Secure`
+  );
+}
+
+function demoRegistrationId(eventId) {
+  return `demo-${eventId}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getDemoRegistration(req, eventId) {
+  return (
+    getDemoRegistrations(req).find(
+      (item) =>
+        item.eventId === eventId &&
+        item.status !== 'cancelled'
+    ) || null
+  );
+}
+
+function registrationPayload(registration) {
+  return {
+    id: registration.id,
+    registration_id: registration.id,
+    event_id: registration.eventId,
+    status: registration.status,
+    waitlistPosition: registration.waitlistPosition || null,
+    checked_in_at: null,
+  };
+}
+
+function demoClashes(req, eventId) {
+  const event = events.find((item) => item.id === eventId);
+
+  if (!event) return [];
+
+  const start = new Date(event.starts_at).getTime();
+  const end = new Date(event.ends_at).getTime();
+
+  return getDemoRegistrations(req)
+    .filter(
+      (registration) =>
+        registration.status === 'registered' &&
+        registration.eventId !== eventId
+    )
+    .map((registration) =>
+      events.find((item) => item.id === registration.eventId)
+    )
+    .filter(Boolean)
+    .filter((other) =>
+      start < new Date(other.ends_at).getTime() &&
+      end > new Date(other.starts_at).getTime()
+    )
+    .map((other) => ({
+      id: other.id,
+      title: other.title,
+      starts_at: other.starts_at,
+      ends_at: other.ends_at,
+      venue_name: other.venue_name,
+    }));
+}
+
 // Keep the original proxy as a fallback for routes not yet converted to demo mode.
 async function proxyToOriginalBackend(req, res) {
   const base = (process.env.API_BACKEND_URL || '').replace(/\/$/, '');
@@ -543,13 +657,16 @@ module.exports = async function handler(req, res) {
   const params = url.searchParams;
   const method = String(req.method || 'GET').toUpperCase();
 
-  // These are the four read-only endpoints required by the existing event pages.
   const isEventList = path === '/api/events';
   const isFilterMetadata = path === '/api/events/filters/meta';
+
   const calendarMatch = path.match(
     /^\/api\/events\/([^/]+)\/calendar\.ics$/
   );
-  const detailMatch = path.match(/^\/api\/events\/([^/]+)$/);
+
+  const detailMatch = path.match(
+    /^\/api\/events\/([^/]+)$/
+  );
 
   const isLocalEventReadRoute =
     isEventList ||
@@ -557,22 +674,322 @@ module.exports = async function handler(req, res) {
     Boolean(calendarMatch) ||
     Boolean(detailMatch);
 
-  // Do not block login, registration, or other API methods.
-  // They retain the old proxy path.
-  if (!isLocalEventReadRoute || !['GET', 'HEAD'].includes(method)) {
+  // Demo authentication so the existing frontend can register without an external backend.
+  if (
+    path === '/api/auth/me' &&
+    ['GET', 'HEAD'].includes(method)
+  ) {
+    return sendJson(res, 200, { user: DEMO_USER }, method);
+  }
+
+  if (
+    ['/api/auth/login', '/api/auth/signup'].includes(path) &&
+    method === 'POST'
+  ) {
+    return sendJson(
+      res,
+      200,
+      { user: DEMO_USER, demo: true },
+      method
+    );
+  }
+
+  if (
+    path === '/api/auth/logout' &&
+    method === 'POST'
+  ) {
+    res.setHeader(
+      'set-cookie',
+      'eh_demo_regs=; Path=/; Max-Age=0; SameSite=Lax; Secure'
+    );
+
+    return sendJson(res, 200, { ok: true }, method);
+  }
+
+  if (
+    path === '/api/me/clashes' &&
+    ['GET', 'HEAD'].includes(method)
+  ) {
+    return sendJson(
+      res,
+      200,
+      {
+        clashes: demoClashes(
+          req,
+          params.get('eventId')
+        ),
+      },
+      method
+    );
+  }
+
+  if (
+    path === '/api/me/events' &&
+    ['GET', 'HEAD'].includes(method)
+  ) {
+    const tab = params.get('tab') || 'upcoming';
+    const now = Date.now();
+
+    const items = getDemoRegistrations(req)
+      .map((registration) => ({
+        registration,
+        event: events.find(
+          (item) => item.id === registration.eventId
+        ),
+      }))
+      .filter(({ event }) => Boolean(event))
+      .filter(({ registration, event }) => {
+        if (tab === 'waitlisted') {
+          return registration.status === 'waitlisted';
+        }
+
+        if (tab === 'cancelled') {
+          return registration.status === 'cancelled';
+        }
+
+        if (tab === 'past') {
+          return new Date(event.ends_at).getTime() <= now;
+        }
+
+        return (
+          registration.status === 'registered' &&
+          new Date(event.ends_at).getTime() > now
+        );
+      })
+      .map(({ registration, event }) => ({
+        registration_id: registration.id,
+        event_id: event.id,
+        title: event.title,
+        category: event.category,
+        starts_at: event.starts_at,
+        ends_at: event.ends_at,
+        venue_name: event.venue_name,
+        waitlistPosition:
+          registration.waitlistPosition || null,
+        checked_in_at: null,
+      }));
+
+    return sendJson(res, 200, { items }, method);
+  }
+
+  const registerMatch = path.match(
+    /^\/api\/events\/([^/]+)\/register$/
+  );
+
+  if (registerMatch && method === 'POST') {
+    let eventId;
+
+    try {
+      eventId = decodeURIComponent(registerMatch[1]);
+    } catch (_error) {
+      eventId = '';
+    }
+
+    const event = events.find(
+      (item) => item.id === eventId
+    );
+
+    if (!event) {
+      return sendJson(res, 404, {
+        error: {
+          code: 'EVENT_NOT_FOUND',
+          message: 'Event not found.',
+        },
+      }, method);
+    }
+
+    const now = Date.now();
+
+    if (
+      event.status !== 'published' ||
+      new Date(event.ends_at).getTime() <= now
+    ) {
+      return sendJson(res, 400, {
+        error: {
+          code: 'EVENT_UNAVAILABLE',
+          message:
+            'This event is no longer available for registration.',
+        },
+      }, method);
+    }
+
+    if (
+      new Date(event.registration_deadline).getTime() <= now
+    ) {
+      return sendJson(res, 400, {
+        error: {
+          code: 'REGISTRATION_CLOSED',
+          message:
+            'Registration is closed for this event.',
+        },
+      }, method);
+    }
+
+    const registrations = getDemoRegistrations(req);
+
+    const existing = registrations.find(
+      (item) =>
+        item.eventId === eventId &&
+        item.status !== 'cancelled'
+    );
+
+    if (existing) {
+      return sendJson(res, 200, {
+        registration: registrationPayload(existing),
+        alreadyRegistered: true,
+      }, method);
+    }
+
+    const clashes = demoClashes(req, eventId);
+
+    const status =
+      event.confirmedCount >= event.capacity
+        ? 'waitlisted'
+        : 'registered';
+
+    const registration = {
+      id: demoRegistrationId(eventId),
+      eventId,
+      status,
+      waitlistPosition:
+        status === 'waitlisted' ? 1 : null,
+      createdAt: new Date().toISOString(),
+      clashes,
+    };
+
+    registrations.push(registration);
+
+    setDemoRegistrations(res, registrations);
+
+    return sendJson(res, 201, {
+      registration: registrationPayload(registration),
+      demo: true,
+    }, method);
+  }
+
+  const cancelMatch = path.match(
+    /^\/api\/events\/([^/]+)\/cancel$/
+  );
+
+  if (cancelMatch && method === 'POST') {
+    let eventId;
+
+    try {
+      eventId = decodeURIComponent(cancelMatch[1]);
+    } catch (_error) {
+      eventId = '';
+    }
+
+    const registrations = getDemoRegistrations(req);
+
+    const index = registrations.findIndex(
+      (item) =>
+        item.eventId === eventId &&
+        item.status !== 'cancelled'
+    );
+
+    if (index === -1) {
+      return sendJson(res, 404, {
+        error: {
+          code: 'REGISTRATION_NOT_FOUND',
+          message:
+            'No active registration found.',
+        },
+      }, method);
+    }
+
+    registrations[index].status = 'cancelled';
+    registrations[index].cancelledAt =
+      new Date().toISOString();
+
+    setDemoRegistrations(res, registrations);
+
+    return sendJson(
+      res,
+      200,
+      { ok: true },
+      method
+    );
+  }
+
+  const qrMatch = path.match(
+    /^\/api\/registrations\/([^/]+)\/qr-secret$/
+  );
+
+  if (
+    qrMatch &&
+    ['GET', 'HEAD'].includes(method)
+  ) {
+    let registrationId;
+
+    try {
+      registrationId = decodeURIComponent(qrMatch[1]);
+    } catch (_error) {
+      registrationId = '';
+    }
+
+    const registration = getDemoRegistrations(req).find(
+      (item) =>
+        item.id === registrationId &&
+        item.status === 'registered'
+    );
+
+    if (!registration) {
+      return sendJson(res, 404, {
+        error: {
+          code: 'REGISTRATION_NOT_FOUND',
+          message: 'Ticket not found.',
+        },
+      }, method);
+    }
+
+    const event = events.find(
+      (item) => item.id === registration.eventId
+    );
+
+    const secret = Buffer.from(
+      `eventhive-demo:${registration.id}:${registration.eventId}`
+    )
+      .toString('hex')
+      .slice(0, 64);
+
+    return sendJson(res, 200, {
+      secret,
+      studentName: DEMO_USER.name,
+      eventTitle:
+        event ? event.title : 'EventHive Event',
+    }, method);
+  }
+
+  if (
+    !isLocalEventReadRoute ||
+    !['GET', 'HEAD'].includes(method)
+  ) {
     return proxyToOriginalBackend(req, res);
   }
 
   if (isFilterMetadata) {
     const venues = [
       ...new Map(
-        events.map((event) => [event.venue_id, event.venue_name])
+        events.map(
+          (event) => [
+            event.venue_id,
+            event.venue_name,
+          ]
+        )
       ).entries(),
     ]
       .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
 
-    return sendJson(res, 200, { venues }, method);
+    return sendJson(
+      res,
+      200,
+      { venues },
+      method
+    );
   }
 
   if (isEventList) {
@@ -584,7 +1001,11 @@ module.exports = async function handler(req, res) {
       50
     );
 
-    const page = positiveInteger(params.get('page'), 1);
+    const page = positiveInteger(
+      params.get('page'),
+      1
+    );
+
     const total = filtered.length;
     const start = (page - 1) * pageSize;
 
@@ -595,7 +1016,12 @@ module.exports = async function handler(req, res) {
     return sendJson(
       res,
       200,
-      { items, page, pageSize, total },
+      {
+        items,
+        page,
+        pageSize,
+        total,
+      },
       method
     );
   }
@@ -614,7 +1040,9 @@ module.exports = async function handler(req, res) {
       }, method);
     }
 
-    const event = events.find((item) => item.id === eventId);
+    const event = events.find(
+      (item) => item.id === eventId
+    );
 
     if (!event) {
       return sendJson(res, 404, {
@@ -626,14 +1054,20 @@ module.exports = async function handler(req, res) {
     }
 
     res.statusCode = 200;
-    res.setHeader('content-type', 'text/calendar; charset=utf-8');
+    res.setHeader(
+      'content-type',
+      'text/calendar; charset=utf-8'
+    );
+
     res.setHeader(
       'content-disposition',
       `attachment; filename="event-${event.id}.ics"`
     );
 
     return res.end(
-      method === 'HEAD' ? undefined : makeCalendarFile(event)
+      method === 'HEAD'
+        ? undefined
+        : makeCalendarFile(event)
     );
   }
 
@@ -651,7 +1085,9 @@ module.exports = async function handler(req, res) {
       }, method);
     }
 
-    const event = events.find((item) => item.id === eventId);
+    const event = events.find(
+      (item) => item.id === eventId
+    );
 
     if (!event) {
       return sendJson(res, 404, {
@@ -665,41 +1101,63 @@ module.exports = async function handler(req, res) {
     const now = Date.now();
 
     const relatedEvents = events
-      .filter((item) =>
-        item.id !== event.id &&
-        item.category === event.category &&
-        item.status === 'published' &&
-        new Date(item.ends_at).getTime() > now
+      .filter(
+        (item) =>
+          item.id !== event.id &&
+          item.category === event.category &&
+          item.status === 'published' &&
+          new Date(item.ends_at).getTime() > now
       )
-      .sort((a, b) =>
-        new Date(a.starts_at).getTime() -
-        new Date(b.starts_at).getTime()
+      .sort(
+        (a, b) =>
+          new Date(a.starts_at).getTime() -
+          new Date(b.starts_at).getTime()
       )
       .slice(0, 3)
       .map(toListEvent);
 
-    // This first stage is read-only: do not pretend login/registration is working.
-    // The next feature stage will replace this disabled state with real demo registration.
-    let buttonState = 'disabled';
-    let buttonReason = 'Registration is not enabled in this demo build yet';
+    const registration = getDemoRegistration(
+      req,
+      event.id
+    );
 
-    if (event.status === 'cancelled') {
+    const userRegistration = registration
+      ? registrationPayload(registration)
+      : null;
+
+    let buttonState = 'open';
+    let buttonReason = null;
+
+    if (registration?.status === 'registered') {
+      buttonState = 'registered';
+    } else if (registration?.status === 'waitlisted') {
+      buttonState = 'waitlisted';
+    } else if (event.status === 'cancelled') {
+      buttonState = 'disabled';
       buttonReason = 'Event cancelled';
     } else if (
       event.status === 'completed' ||
       new Date(event.ends_at).getTime() <= now
     ) {
+      buttonState = 'disabled';
       buttonReason = 'Event ended';
     } else if (
       event.registration_deadline &&
       new Date(event.registration_deadline).getTime() <= now
     ) {
+      buttonState = 'disabled';
       buttonReason = 'Registration closed';
+    } else if (
+      event.confirmedCount >= event.capacity
+    ) {
+      buttonState = 'open';
+      buttonReason =
+        'Event is full — join the waitlist';
     }
 
     return sendJson(res, 200, {
       event,
-      userRegistration: null,
+      userRegistration,
       buttonState,
       buttonReason,
       relatedEvents,
