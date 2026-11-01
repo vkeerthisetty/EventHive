@@ -14,6 +14,7 @@ import { Profile } from './pages/Profile';
 import { StudentFeedback } from './pages/StudentFeedback';
 import { OrganizerDashboard } from './pages/OrganizerDashboard';
 import { CreateEvent } from './pages/CreateEvent';
+import { CheckInScanner } from './pages/CheckInScanner';
 
 const Msg: React.FC<{ title: string; text: string }> = ({ title, text }) => (
   <div className="max-w-md mx-auto px-4 py-24 text-center">
@@ -124,6 +125,15 @@ export const App: React.FC = () => {
             element={
               <Guard roles={O}>
                 <CreateEvent />
+              </Guard>
+            }
+          />
+
+          <Route
+            path="/organizer/check-in"
+            element={
+              <Guard roles={O}>
+                <CheckInScanner />
               </Guard>
             }
           />

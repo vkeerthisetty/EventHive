@@ -188,7 +188,7 @@ export const EventDetail: React.FC = () => {
           ),
         });
 
-        registerDemoEvent(id);
+        registerDemoEvent(id, user?.name || 'Demo Student');
 
         await fetchEvent();
 
@@ -262,7 +262,7 @@ export const EventDetail: React.FC = () => {
           ),
         });
 
-        registerDemoEvent(id);
+        registerDemoEvent(id, user?.name || 'Demo Student');
 
         await fetchEvent();
 

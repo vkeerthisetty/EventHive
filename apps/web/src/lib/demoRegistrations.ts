@@ -6,6 +6,8 @@ export interface DemoRegistration {
   secret: string;
   status: 'registered' | 'cancelled';
   createdAt: string;
+  studentName?: string;
+  checkedInAt?: string | null;
 }
 
 export function getDemoRegistrations(): DemoRegistration[] {
@@ -21,7 +23,7 @@ export function getDemoRegistration(eventId: string): DemoRegistration | undefin
   return getDemoRegistrations().find((item) => item.eventId === eventId && item.status === 'registered');
 }
 
-export function registerDemoEvent(eventId: string): DemoRegistration {
+export function registerDemoEvent(eventId: string, studentName = 'Demo Student'): DemoRegistration {
   const existing = getDemoRegistration(eventId);
   if (existing) return existing;
   const secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -31,8 +33,24 @@ export function registerDemoEvent(eventId: string): DemoRegistration {
     secret,
     status: 'registered',
     createdAt: new Date().toISOString(),
+    studentName,
+    checkedInAt: null,
   };
   localStorage.setItem(KEY, JSON.stringify([...getDemoRegistrations(), registration]));
+  return registration;
+}
+
+export function checkInDemoRegistration(registrationId: string): DemoRegistration | undefined {
+  const registrations = getDemoRegistrations();
+  const registration = registrations.find(
+    (item) => item.id === registrationId && item.status === 'registered'
+  );
+  if (!registration) return undefined;
+  if (!registration.checkedInAt) {
+    registration.checkedInAt = new Date().toISOString();
+    localStorage.setItem(KEY, JSON.stringify(registrations));
+    window.dispatchEvent(new Event('demo-registrations-updated'));
+  }
   return registration;
 }
 

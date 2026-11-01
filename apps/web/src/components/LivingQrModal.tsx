@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import QRCode from 'qrcode';
-import { X, ShieldCheck } from 'lucide-react';
+import { X, ShieldCheck, Copy, Check } from 'lucide-react';
 
 interface LivingQrModalProps {
   registrationId: string;
@@ -17,6 +17,8 @@ export const LivingQrModal: React.FC<LivingQrModalProps> = ({ registrationId, on
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [qrPayload, setQrPayload] = useState('');
+  const [copied, setCopied] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(30);
 
   // Fetch secret once and keep in memory
@@ -86,6 +88,7 @@ export const LivingQrModal: React.FC<LivingQrModalProps> = ({ registrationId, on
 
       const mac = sigHex.substring(0, 20);
       const payload = `EH1.${registrationId}.${windowIdx}.${mac}`;
+      setQrPayload(payload);
 
       const url = await QRCode.toDataURL(payload, {
         margin: 2,
@@ -146,6 +149,21 @@ export const LivingQrModal: React.FC<LivingQrModalProps> = ({ registrationId, on
             <p className="text-sm text-slate-500 dark:text-slate-400 truncate max-w-xs mx-auto">
               {data?.eventTitle}
             </p>
+
+            {localTicket && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(qrPayload);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                }}
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                {copied ? 'Ticket code copied' : 'Copy ticket code for demo scanner'}
+              </button>
+            )}
 
             <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
               Rotates every 30s. Offline TOTP verification. Screenshots expire within 60s.

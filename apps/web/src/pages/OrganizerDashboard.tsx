@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, PlusCircle } from 'lucide-react';
+import { Calendar, PlusCircle, QrCode } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { getDemoEvents } from '../lib/demoEvents';
+import { getDemoRegistrations } from '../lib/demoRegistrations';
 
 const MIN_REPORT_RESPONSES = 5;
 
@@ -64,6 +65,11 @@ export const OrganizerDashboard: React.FC = () => {
       handleUpdate
     );
 
+    window.addEventListener(
+      'demo-registrations-updated',
+      handleUpdate
+    );
+
     return () => {
       window.removeEventListener(
         'demo-events-updated',
@@ -72,6 +78,11 @@ export const OrganizerDashboard: React.FC = () => {
 
       window.removeEventListener(
         'storage',
+        handleUpdate
+      );
+
+      window.removeEventListener(
+        'demo-registrations-updated',
         handleUpdate
       );
     };
@@ -85,11 +96,11 @@ export const OrganizerDashboard: React.FC = () => {
     0
   );
 
-  const totalAttended = events.reduce(
-    (total, event) =>
-      total + (event.confirmedCount || 0),
-    0
-  );
+  const totalAttended = getDemoRegistrations().filter(
+    (registration) =>
+      registration.checkedInAt &&
+      events.some((event) => event.id === registration.eventId)
+  ).length;
 
   const eventIds = new Set(events.map((event) => event.id));
   const organizerFeedback = feedback.filter((item) => eventIds.has(item.eventId));
@@ -120,13 +131,22 @@ export const OrganizerDashboard: React.FC = () => {
 
         </div>
 
-        <Link
-          to="/organizer/create"
-          className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-sm transition"
-        >
-          <PlusCircle className="w-4 h-4" />
-          Create Event
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Link
+            to="/organizer/check-in"
+            className="inline-flex items-center justify-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-xl text-sm font-bold shadow-sm transition"
+          >
+            <QrCode className="w-4 h-4" />
+            Scan Tickets
+          </Link>
+          <Link
+            to="/organizer/create"
+            className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-sm transition"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Create Event
+          </Link>
+        </div>
 
       </div>
 

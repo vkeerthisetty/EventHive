@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Shield,
   Check,
+  QrCode,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -211,14 +212,24 @@ export const Navbar: React.FC = () => {
                   </Link>
 
                   {(user.role === 'organizer' || user.role === 'admin') && (
-                    <Link
-                      to="/organizer"
-                      onClick={() => setShowAvatarMenu(false)}
-                      className="flex items-center space-x-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-indigo-600 dark:text-indigo-400 font-medium transition"
-                    >
-                      <LayoutDashboard className="w-4 h-4" />
-                      <span>Organizer Dashboard</span>
-                    </Link>
+                    <>
+                      <Link
+                        to="/organizer"
+                        onClick={() => setShowAvatarMenu(false)}
+                        className="flex items-center space-x-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-indigo-600 dark:text-indigo-400 font-medium transition"
+                      >
+                        <LayoutDashboard className="w-4 h-4" />
+                        <span>Organizer Dashboard</span>
+                      </Link>
+                      <Link
+                        to="/organizer/check-in"
+                        onClick={() => setShowAvatarMenu(false)}
+                        className="flex items-center space-x-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-indigo-600 dark:text-indigo-400 font-medium transition"
+                      >
+                        <QrCode className="w-4 h-4" />
+                        <span>Scan Tickets</span>
+                      </Link>
+                    </>
                   )}
 
                   <div className="border-t border-slate-100 dark:border-slate-800 my-1"></div>
