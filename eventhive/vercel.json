@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build:shared && npm --workspace=@eventhive/web run build",
+  "outputDirectory": "apps/web/dist",
+  "framework": "vite",
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}

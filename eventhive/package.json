@@ -1,0 +1,40 @@
+{
+  "name": "eventhive-root",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:shared": "npm --workspace=@eventhive/shared run build",
+    "build": "npm run build:shared && npm --workspace=@eventhive/api run build && npm --workspace=@eventhive/issuer run build && npm --workspace=@eventhive/collector run build && npm --workspace=@eventhive/web run build",
+    "migrate": "TS_NODE_TRANSPILE_ONLY=1 node -r ts-node/register scripts/migrate.ts",
+    "seed": "TS_NODE_TRANSPILE_ONLY=1 node -r ts-node/register scripts/seed.ts",
+    "dev": "concurrently -n \"api,issuer,collector,web\" -c \"blue,magenta,cyan,green\" \"npm run dev:api\" \"npm run dev:issuer\" \"npm run dev:collector\" \"npm run dev:web\"",
+    "dev:api": "npm --workspace=@eventhive/api run dev",
+    "dev:issuer": "npm --workspace=@eventhive/issuer run dev",
+    "dev:collector": "npm --workspace=@eventhive/collector run dev",
+    "dev:web": "npm --workspace=@eventhive/web run dev",
+    "test": "vitest run",
+    "db:start": "TS_NODE_TRANSPILE_ONLY=1 node -r ts-node/register scripts/embedded-pg.ts",
+    "verify:static": "node scripts/verify-static.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "@types/supertest": "^6.0.2",
+    "concurrently": "^8.2.2",
+    "dotenv": "^16.4.5",
+    "supertest": "^7.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.5.4",
+    "vitest": "^2.1.3"
+  },
+  "dependencies": {
+    "embedded-postgres": "^18.6.0-beta.19",
+    "pg": "^8.12.0"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

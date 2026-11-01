@@ -1,0 +1,58 @@
+name: EventHive Verification
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Static scope checks
+        run: npm run verify:static
+      - name: Build all apps
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+      - name: Configure local environment
+        run: cp .env.example .env
+      - name: Start PostgreSQL
+        run: docker compose up -d postgres
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..30}; do
+            if docker compose exec -T postgres pg_isready -U postgres; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs postgres
+          exit 1
+      - name: Migrate and seed
+        run: npm run migrate && npm run seed
+      - name: Start backend services
+        run: |
+          npm --workspace=@eventhive/api start > /tmp/api.log 2>&1 &
+          npm --workspace=@eventhive/issuer start > /tmp/issuer.log 2>&1 &
+          npm --workspace=@eventhive/collector start > /tmp/collector.log 2>&1 &
+          sleep 4
+      - name: Backend health smoke test
+        run: |
+          curl --fail http://localhost:3000/health
+          curl --fail http://localhost:3001/health
+          curl --fail http://localhost:3002/health
+      - name: Frontend build smoke check
+        run: test -f apps/web/dist/index.html
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          cat /tmp/api.log 2>/dev/null || true
+          cat /tmp/issuer.log 2>/dev/null || true
+          cat /tmp/collector.log 2>/dev/null || true
+          docker compose logs postgres || true
