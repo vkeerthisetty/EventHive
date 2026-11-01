@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import { formatEventDateTime } from '@eventhive/shared';
 import { LivingQrModal } from '../components/LivingQrModal';
+import { getDemoEvents } from '../lib/demoEvents';
+import { getDemoRegistrations } from '../lib/demoRegistrations';
 
 export const MyEvents: React.FC = () => {
   const [tab, setTab] = useState<'upcoming' | 'waitlisted' | 'past' | 'cancelled'>('upcoming');
@@ -16,7 +18,24 @@ export const MyEvents: React.FC = () => {
     setError('');
     fetch(`/api/me/events?tab=${tab}`, { credentials: 'include' })
       .then(async (res) => { if (!res.ok) throw new Error('Failed to load your events'); return res.json(); })
-      .then((data) => setItems(data.items || []))
+      .then((data) => {
+        const localItems = getDemoRegistrations().flatMap((registration) => {
+          const event = getDemoEvents().find((item) => item.id === registration.eventId);
+          if (!event) return [];
+          const past = new Date(event.ends_at).getTime() <= Date.now();
+          if (tab !== (registration.status === 'cancelled' ? 'cancelled' : past ? 'past' : 'upcoming')) return [];
+          return [{
+            registration_id: registration.id,
+            event_id: event.id,
+            title: event.title,
+            category: event.category,
+            starts_at: event.starts_at,
+            ends_at: event.ends_at,
+            venue_name: event.venue_name,
+          }];
+        });
+        setItems([...(data.items || []), ...localItems]);
+      })
       .catch((e) => setError(e.message || 'Failed to load your events'))
       .finally(() => setLoading(false));
   }, [tab]);
@@ -133,6 +152,15 @@ export const MyEvents: React.FC = () => {
       {selectedTicketId && (
         <LivingQrModal
           registrationId={selectedTicketId}
+          localTicket={(() => {
+            const registration = getDemoRegistrations().find((item) => item.id === selectedTicketId);
+            const event = registration && getDemoEvents().find((item) => item.id === registration.eventId);
+            return registration && event ? {
+              secret: registration.secret,
+              studentName: 'Demo Student',
+              eventTitle: event.title,
+            } : undefined;
+          })()}
           onClose={() => setSelectedTicketId(null)}
         />
       )}

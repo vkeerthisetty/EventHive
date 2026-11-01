@@ -5,9 +5,10 @@ import { X, ShieldCheck } from 'lucide-react';
 interface LivingQrModalProps {
   registrationId: string;
   onClose: () => void;
+  localTicket?: { secret: string; studentName: string; eventTitle: string };
 }
 
-export const LivingQrModal: React.FC<LivingQrModalProps> = ({ registrationId, onClose }) => {
+export const LivingQrModal: React.FC<LivingQrModalProps> = ({ registrationId, onClose, localTicket }) => {
   const [data, setData] = useState<{
     secret: string;
     studentName: string;
@@ -20,12 +21,17 @@ export const LivingQrModal: React.FC<LivingQrModalProps> = ({ registrationId, on
 
   // Fetch secret once and keep in memory
   useEffect(() => {
+    if (localTicket) {
+      setData(localTicket);
+      setLoading(false);
+      return;
+    }
     let active = true;
     fetch(`/api/registrations/${registrationId}/qr-secret`)
       .then(async (res) => {
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error?.message || 'Failed to fetch ticket secret');
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.error?.message || 'Failed to fetch ticket secret');
         }
         return res.json();
       })
@@ -45,7 +51,7 @@ export const LivingQrModal: React.FC<LivingQrModalProps> = ({ registrationId, on
     return () => {
       active = false;
     };
-  }, [registrationId]);
+  }, [registrationId, localTicket]);
 
   // Compute HMAC and update QR code every second
   useEffect(() => {
@@ -89,8 +95,12 @@ export const LivingQrModal: React.FC<LivingQrModalProps> = ({ registrationId, on
       setQrDataUrl(url);
     };
 
-    updateQr();
-    timer = setInterval(updateQr, 1000);
+    const refresh = () => {
+      updateQr().catch(() => setError('Unable to generate this ticket. Please reload and try again.'));
+    };
+
+    refresh();
+    timer = setInterval(refresh, 1000);
 
     return () => clearInterval(timer);
   }, [data, registrationId]);

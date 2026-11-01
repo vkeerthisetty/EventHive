@@ -21,6 +21,7 @@ import {
   getDemoEventById,
   updateDemoEvent,
 } from '../lib/demoEvents';
+import { getDemoRegistration, registerDemoEvent, cancelDemoRegistration } from '../lib/demoRegistrations';
 
 export const EventDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -58,8 +59,8 @@ export const EventDetail: React.FC = () => {
 
         setEventData({
           event: demoEvent,
-          userRegistration: null,
-          buttonState: 'open',
+          userRegistration: getDemoRegistration(id) || null,
+          buttonState: getDemoRegistration(id) ? 'registered' : 'open',
           buttonReason: '',
           relatedEvents: [],
         });
@@ -187,6 +188,8 @@ export const EventDetail: React.FC = () => {
           ),
         });
 
+        registerDemoEvent(id);
+
         await fetchEvent();
 
         alert(
@@ -259,6 +262,8 @@ export const EventDetail: React.FC = () => {
           ),
         });
 
+        registerDemoEvent(id);
+
         await fetchEvent();
 
         alert(
@@ -307,10 +312,13 @@ export const EventDetail: React.FC = () => {
     }
 
     if (isDemoEvent) {
-      alert(
-        'Demo registration cancellation is not persistent.'
-      );
-
+      cancelDemoRegistration(id);
+      const demoEvent = getDemoEventById(id);
+      if (demoEvent) updateDemoEvent(id, {
+        confirmedCount: Math.max(0, demoEvent.confirmedCount - 1),
+        seatsLeft: Math.min(demoEvent.capacity, demoEvent.seatsLeft + 1),
+      });
+      await fetchEvent();
       return;
     }
 
@@ -390,10 +398,8 @@ export const EventDetail: React.FC = () => {
   const isEnded =
     new Date() >= new Date(event.ends_at);
 
-  const demoButtonState = isDemoEvent
-    ? event.seatsLeft > 0
-      ? 'open'
-      : 'full'
+  const demoButtonState = isDemoEvent && buttonState === 'open' && event.seatsLeft <= 0
+    ? 'full'
     : buttonState;
 
   return (
@@ -828,13 +834,17 @@ export const EventDetail: React.FC = () => {
       )}
 
       {/* QR Ticket */}
-      {!isDemoEvent &&
-        showQrModal &&
+      {showQrModal &&
         userRegistration && (
           <LivingQrModal
             registrationId={
               userRegistration.id
             }
+            localTicket={isDemoEvent ? {
+              secret: userRegistration.secret,
+              studentName: user?.name || 'Demo Student',
+              eventTitle: event.title,
+            } : undefined}
             onClose={() =>
               setShowQrModal(false)
             }
