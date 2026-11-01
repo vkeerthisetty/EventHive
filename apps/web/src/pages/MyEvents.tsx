@@ -32,6 +32,7 @@ export const MyEvents: React.FC = () => {
             starts_at: event.starts_at,
             ends_at: event.ends_at,
             venue_name: event.venue_name,
+            checked_in_at: past ? registration.createdAt : null,
           }];
         });
         setItems([...(data.items || []), ...localItems]);

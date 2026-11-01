@@ -398,9 +398,11 @@ export const EventDetail: React.FC = () => {
   const isEnded =
     new Date() >= new Date(event.ends_at);
 
-  const demoButtonState = isDemoEvent && buttonState === 'open' && event.seatsLeft <= 0
-    ? 'full'
-    : buttonState;
+  const demoButtonState = isEnded
+    ? 'ended'
+    : isDemoEvent && buttonState === 'open' && event.seatsLeft <= 0
+      ? 'full'
+      : buttonState;
 
   return (
     <div className="space-y-12 pb-20 max-w-5xl mx-auto">
@@ -775,14 +777,14 @@ export const EventDetail: React.FC = () => {
                   className="w-full py-3 px-4 bg-slate-200 dark:bg-slate-800 text-slate-400 font-bold rounded-2xl cursor-not-allowed text-xs min-h-tap"
                 >
                   {buttonReason ||
-                    'Registration unavailable'}
+                    (isEnded ? 'Event ended' : 'Registration unavailable')}
                 </button>
 
               )}
 
-              {!isDemoEvent &&
-                userRegistration?.checked_in_at &&
-                isEnded && (
+              {isEnded &&
+                user?.role === 'student' &&
+                (isDemoEvent || userRegistration?.checked_in_at) && (
                   <Link
                     to={`/events/${event.id}/feedback`}
                     className="w-full inline-flex items-center justify-center space-x-1.5 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition shadow-sm"
@@ -791,7 +793,7 @@ export const EventDetail: React.FC = () => {
                     <MessageSquare className="w-4 h-4" />
 
                     <span>
-                      Give Anonymous Feedback
+                      {isDemoEvent ? 'Preview Anonymous Feedback' : 'Give Anonymous Feedback'}
                     </span>
 
                   </Link>

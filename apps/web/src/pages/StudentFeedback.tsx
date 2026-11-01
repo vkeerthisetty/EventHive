@@ -26,6 +26,7 @@ const COLLECTOR_URL = import.meta.env.VITE_COLLECTOR_URL || 'http://localhost:30
 export const StudentFeedback: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const isDemoEvent = Boolean(eventId?.startsWith('demo-'));
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loadingPass, setLoadingPass] = useState(false);
@@ -69,6 +70,16 @@ export const StudentFeedback: React.FC = () => {
     setLoadingPass(true);
 
     try {
+      if (isDemoEvent) {
+        setTokenObj({
+          p: crypto.randomUUID().replaceAll('-', ''),
+          s: crypto.randomUUID().replaceAll('-', ''),
+        });
+        setPassReady(true);
+        setTimeout(() => setStep(2), 500);
+        return;
+      }
+
       // 1. Get grant from Main API
       const grantRes = await fetch('/api/anon/grant', {
         method: 'POST',
@@ -163,6 +174,30 @@ export const StudentFeedback: React.FC = () => {
     }
 
     try {
+      if (isDemoEvent) {
+        const receipt = `demo-${crypto.randomUUID()}`;
+        const stored = JSON.parse(localStorage.getItem('eventhive_demo_feedback') || '[]');
+        const anonymousRecord = {
+          receipt,
+          eventId,
+          overall,
+          content,
+          delivery,
+          venue,
+          value,
+          topic,
+          wouldRecommend,
+          comment: comment.trim() || null,
+        };
+        localStorage.setItem(
+          'eventhive_demo_feedback',
+          JSON.stringify([...(Array.isArray(stored) ? stored : []), anonymousRecord])
+        );
+        setReceiptTokenHash(receipt);
+        setStep(3);
+        return;
+      }
+
       const res = await fetch(`${COLLECTOR_URL}/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -188,6 +223,12 @@ export const StudentFeedback: React.FC = () => {
 
   // Receipt verification actions (Section 10.10)
   const handleCheckCounted = async () => {
+    if (isDemoEvent) {
+      const stored = JSON.parse(localStorage.getItem('eventhive_demo_feedback') || '[]');
+      setIsCounted(Array.isArray(stored) && stored.some((item) => item.receipt === receiptTokenHash));
+      return;
+    }
+
     try {
       const res = await fetch(`${COLLECTOR_URL}/receipt/${receiptTokenHash}`);
       if (res.ok) {
@@ -200,6 +241,11 @@ export const StudentFeedback: React.FC = () => {
   };
 
   const handleVerifySignature = async () => {
+    if (isDemoEvent) {
+      setSigValid(Boolean(tokenObj?.p && tokenObj?.s));
+      return;
+    }
+
     try {
       const keyRes = await fetch(`${COLLECTOR_URL}/keys/${eventId}/feedback`);
       const { publicKey: pubKeyJwk } = await keyRes.json();
@@ -220,7 +266,11 @@ export const StudentFeedback: React.FC = () => {
       <div className="text-center space-y-2">
         <span className="text-xs font-bold uppercase tracking-wider text-primary">Anonymous Feedback</span>
         <h1 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">Your Confidential Voice</h1>
-        <p className="text-xs text-slate-400">Cryptographically unlinkable using RFC 9474 RSA Blind Signatures</p>
+        <p className="text-xs text-slate-400">
+          {isDemoEvent
+            ? 'Hackathon preview: anonymous data flow and receipt verification run in this browser'
+            : 'Cryptographically unlinkable using RFC 9474 RSA Blind Signatures'}
+        </p>
 
         {/* 3 Step Indicator */}
         <div className="flex items-center justify-center space-x-4 pt-4">
@@ -261,7 +311,9 @@ export const StudentFeedback: React.FC = () => {
               {passReady ? 'Your pass is ready!' : 'Acquire Your Blind Signature Pass'}
             </h3>
             <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-              Your device will generate a random secret token and blind it before signing. Even the server cannot trace your answers back to your identity.
+              {isDemoEvent
+                ? 'This preview creates a one-time anonymous pass in your browser and stores feedback without your profile details.'
+                : 'Your device will generate a random secret token and blind it before signing. Even the server cannot trace your answers back to your identity.'}
             </p>
           </div>
 
@@ -275,7 +327,7 @@ export const StudentFeedback: React.FC = () => {
               onClick={handleGetPass}
               className="px-8 py-3 bg-primary text-white font-bold rounded-2xl shadow hover:bg-primary-dark transition min-h-tap disabled:opacity-50"
             >
-              {loadingPass ? 'Blinding & Signing Token...' : 'Get Anonymous Pass'}
+              {loadingPass ? 'Preparing Anonymous Pass...' : 'Get Anonymous Pass'}
             </button>
           )}
         </div>
@@ -433,7 +485,9 @@ export const StudentFeedback: React.FC = () => {
 
           <div className="space-y-1">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Feedback Submitted!</h2>
-            <p className="text-sm text-slate-500">Your cryptographic receipt has been verified.</p>
+            <p className="text-sm text-slate-500">
+              {isDemoEvent ? 'Your demo receipt is ready for verification.' : 'Your cryptographic receipt has been verified.'}
+            </p>
           </div>
 
           {/* Receipt Token Short Hash */}
