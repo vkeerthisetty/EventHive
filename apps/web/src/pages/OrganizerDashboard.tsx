@@ -1,30 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Calendar, PlusCircle } from 'lucide-react';
 
-const DEMO_EVENTS = [
-  {
-    id: '1',
-    title: 'AI & Machine Learning Workshop',
-    category: 'Technology',
-    startsAt: '2026-11-15T10:00:00',
-    venueName: 'Main Auditorium',
-    registrationCount: 42,
-    capacity: 100,
-    status: 'published',
-  },
-  {
-    id: '2',
-    title: 'Web Development Bootcamp',
-    category: 'Technology',
-    startsAt: '2026-11-20T14:00:00',
-    venueName: 'Computer Lab',
-    registrationCount: 28,
-    capacity: 50,
-    status: 'published',
-  },
-];
+import { useAuth } from '../context/AuthContext';
+import { getDemoEvents } from '../lib/demoEvents';
 
 export const OrganizerDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -32,26 +11,83 @@ export const OrganizerDashboard: React.FC = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Demo-only dashboard data
-    setEvents(DEMO_EVENTS);
-    setLoading(false);
-  }, []);
+  const loadDashboard = () => {
+    setLoading(true);
 
-  const stats = {
-    totalEvents: events.length,
-    totalRegistrations: events.reduce(
-      (total, event) => total + event.registrationCount,
-      0
-    ),
-    totalAttended: 38,
+    try {
+      const demoEvents = getDemoEvents();
+
+      /*
+        For demo purposes, show events created in this browser.
+        Later this can be replaced with API events belonging
+        to the logged-in organizer.
+      */
+
+      const organizerEvents = demoEvents.filter(
+        (event) =>
+          !user?.name ||
+          event.organizer_name === user.name
+      );
+
+      setEvents(organizerEvents);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    loadDashboard();
+
+    const handleUpdate = () => {
+      loadDashboard();
+    };
+
+    window.addEventListener(
+      'demo-events-updated',
+      handleUpdate
+    );
+
+    window.addEventListener(
+      'storage',
+      handleUpdate
+    );
+
+    return () => {
+      window.removeEventListener(
+        'demo-events-updated',
+        handleUpdate
+      );
+
+      window.removeEventListener(
+        'storage',
+        handleUpdate
+      );
+    };
+  }, [user]);
+
+  const totalEvents = events.length;
+
+  const totalRegistrations = events.reduce(
+    (total, event) =>
+      total + (event.registrationCount || 0),
+    0
+  );
+
+  const totalAttended = events.reduce(
+    (total, event) =>
+      total + (event.confirmedCount || 0),
+    0
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Top Banner */}
+
+      {/* HEADER */}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+
         <div>
+
           <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
             Organizer Portal
           </span>
@@ -61,113 +97,173 @@ export const OrganizerDashboard: React.FC = () => {
           </h1>
 
           <p className="text-xs text-slate-500 mt-1">
-            Welcome back, {user?.name}. View your event activity at a glance.
+            Create and manage demo campus events.
           </p>
+
         </div>
 
-        <span className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-300">
-          Demo Mode
-        </span>
+        <Link
+          to="/organizer/create"
+          className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-sm transition"
+        >
+          <PlusCircle className="w-4 h-4" />
+          Create Event
+        </Link>
+
       </div>
 
-      {/* Metric Cards */}
+      {/* METRICS */}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+
           <span className="text-xs font-bold uppercase text-slate-400">
             Managed Events
           </span>
 
           <p className="text-3xl font-black text-slate-900 dark:text-white mt-2">
-            {stats.totalEvents}
+            {totalEvents}
           </p>
+
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+
           <span className="text-xs font-bold uppercase text-slate-400">
             Total Registrations
           </span>
 
           <p className="text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-2">
-            {stats.totalRegistrations}
+            {totalRegistrations}
           </p>
+
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+
           <span className="text-xs font-bold uppercase text-slate-400">
-            Verified Attendances
+            Confirmed Attendees
           </span>
 
           <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-2">
-            {stats.totalAttended}
+            {totalAttended}
           </p>
+
         </div>
+
       </div>
 
-      {/* Events Table */}
+      {/* EVENTS */}
+
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+
           <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
-            Your Campus Events
+            Your Events
           </h2>
+
+          <span className="text-xs text-slate-400">
+            Stored locally for demo
+          </span>
+
         </div>
 
         {loading ? (
+
           <div className="p-12 text-center text-slate-500">
             Loading dashboard...
           </div>
+
         ) : events.length === 0 ? (
+
           <div className="text-center py-16">
+
             <Calendar className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
 
             <p className="text-base font-bold text-slate-700 dark:text-slate-300">
               No events created yet
             </p>
 
-            <p className="text-xs text-slate-400 mt-1">
-              No events are assigned to this organizer yet.
+            <p className="text-xs text-slate-400 mt-1 mb-5">
+              Create your first demo event to see it here.
             </p>
+
+            <Link
+              to="/organizer/create"
+              className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Create Your First Event
+            </Link>
+
           </div>
+
         ) : (
+
           <div className="overflow-x-auto">
+
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/50 text-[11px] font-bold uppercase text-slate-500 border-b border-slate-200 dark:border-slate-800">
+
+              <thead className="bg-slate-50 dark:bg-slate-800/50 text-[11px] font-bold uppercase text-slate-500">
+
                 <tr>
-                  <th className="px-6 py-3.5">Event</th>
-                  <th className="px-6 py-3.5">Date & Venue</th>
+
+                  <th className="px-6 py-3.5">
+                    Event
+                  </th>
+
+                  <th className="px-6 py-3.5">
+                    Date & Venue
+                  </th>
+
                   <th className="px-6 py-3.5 text-center">
                     Registrations
                   </th>
+
                   <th className="px-6 py-3.5 text-center">
                     Status
                   </th>
+
                   <th className="px-6 py-3.5 text-right">
-                    Actions
+                    Action
                   </th>
+
                 </tr>
+
               </thead>
 
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {events.map((ev) => (
+
+                {events.map((event) => (
+
                   <tr
-                    key={ev.id}
-                    className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition"
+                    key={event.id}
+                    className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40"
                   >
+
                     <td className="px-6 py-4">
+
                       <Link
-                        to={`/events/${ev.id}`}
+                        to={`/events/${event.id}`}
                         className="font-bold text-slate-900 dark:text-white hover:underline"
                       >
-                        {ev.title}
+                        {event.title}
                       </Link>
 
                       <span className="block text-xs text-slate-400 mt-0.5">
-                        {ev.category}
+                        {event.category}
                       </span>
+
                     </td>
 
                     <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-300">
+
                       <div>
-                        {new Date(ev.startsAt).toLocaleDateString([], {
+                        {new Date(
+                          event.starts_at
+                        ).toLocaleDateString([], {
                           month: 'short',
                           day: 'numeric',
                           hour: '2-digit',
@@ -176,43 +272,52 @@ export const OrganizerDashboard: React.FC = () => {
                       </div>
 
                       <div className="text-slate-400">
-                        {ev.venueName}
+                        {event.venue_name}
                       </div>
+
+                    </td>
+
+                    <td className="px-6 py-4 text-center font-bold text-xs">
+
+                      {event.registrationCount} / {event.capacity}
+
                     </td>
 
                     <td className="px-6 py-4 text-center">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">
-                        {ev.registrationCount} / {ev.capacity}
-                      </span>
-                    </td>
 
-                    <td className="px-6 py-4 text-center">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${
-                          ev.status === 'published'
-                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                        }`}
-                      >
-                        {ev.status.toUpperCase()}
+                      <span className="inline-flex px-2 py-1 rounded text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+
+                        {event.status.toUpperCase()}
+
                       </span>
+
                     </td>
 
                     <td className="px-6 py-4 text-right">
+
                       <Link
-                        to={`/events/${ev.id}`}
-                        className="text-indigo-600 hover:underline text-xs font-semibold"
+                        to={`/events/${event.id}`}
+                        className="text-indigo-600 hover:underline text-xs font-bold"
                       >
-                        View event
+                        View Event
                       </Link>
+
                     </td>
+
                   </tr>
+
                 ))}
+
               </tbody>
+
             </table>
+
           </div>
+
         )}
+
       </div>
+
     </div>
   );
 };
